@@ -1,0 +1,322 @@
+"""Real customer-support agent used by the DeepEval tracing evaluation.
+
+The agent chooses tools through Groq tool calling.  The tools are local
+support-service implementations for this evaluation project; no test result
+is read from the CSV as the agent's actual tool call.
+"""
+
+import json
+import os
+from typing import Any, Callable
+
+from groq import Groq
+from deepeval.tracing import observe, update_current_trace
+
+
+MODEL_NAME = os.getenv("AGENT_MODEL", "openai/gpt-oss-20b")
+
+
+ORDERS = {
+    "ORD-1042": {"status": "Shipped", "eta": "2026-05-13", "category": "electronics"},
+    "ORD-2099": {"status": "Delivered", "eta": "2026-05-08", "category": "clothing"},
+    "ORD-7777": {"status": "Processing", "eta": "2026-05-15", "category": "food"},
+}
+
+
+@observe(name="track_order_tool")
+def track_order_tool(order_id: str) -> str:
+    order = ORDERS.get(order_id.upper())
+    if not order:
+        return f"No order was found for {order_id}."
+    return f"Order {order_id} is {order['status']}. Estimated delivery: {order['eta']}."
+
+
+@observe(name="refund_policy_tool")
+def refund_policy_tool(category: str) -> str:
+    policies = {
+        "electronics": "Electronics can be returned within 15 days if unopened.",
+        "clothing": "Clothing can be returned within 30 days with tags attached.",
+        "food": "Food items are non-returnable for safety reasons.",
+    }
+    return policies.get(category.lower(), f"No refund policy is available for {category}.")
+
+
+@observe(name="change_address_tool")
+def change_address_tool(order_id: str, new_address: str) -> str:
+    if not new_address.strip():
+        return "A new delivery address is required."
+    return f"The delivery address for {order_id} can be changed before shipment."
+
+
+@observe(name="cancel_order_tool")
+def cancel_order_tool(order_id: str) -> str:
+    return f"Cancellation was requested for {order_id}. The request will be checked before shipment."
+
+
+@observe(name="cancellation_fee_tool")
+def cancellation_fee_tool(order_id: str) -> str:
+    return f"The cancellation fee for {order_id} depends on its shipment status."
+
+
+@observe(name="delivery_estimate_tool")
+def delivery_estimate_tool(order_id: str) -> str:
+    order = ORDERS.get(order_id.upper())
+    return f"Estimated delivery for {order_id}: {order['eta']}." if order else f"No estimate is available for {order_id}."
+
+
+@observe(name="delivery_options_tool")
+def delivery_options_tool() -> str:
+    return "Available delivery options are standard, express, and scheduled delivery."
+
+
+@observe(name="get_invoice_tool")
+def get_invoice_tool(order_id: str) -> str:
+    return f"The invoice for {order_id} is available in the customer's order account."
+
+
+@observe(name="payment_issue_tool")
+def payment_issue_tool(issue: str) -> str:
+    return f"Payment support will review this issue: {issue}."
+
+
+@observe(name="payment_methods_tool")
+def payment_methods_tool() -> str:
+    return "Accepted payment methods include cards, UPI, and supported digital wallets."
+
+
+@observe(name="refund_timeline_tool")
+def refund_timeline_tool() -> str:
+    return "Approved refunds are normally processed within 5 to 7 business days."
+
+
+@observe(name="track_refund_tool")
+def track_refund_tool(refund_id: str) -> str:
+    return f"Refund status for {refund_id}: processing."
+
+
+@observe(name="return_request_tool")
+def return_request_tool(order_id: str, reason: str) -> str:
+    return f"A return request was created for {order_id}. Reason recorded: {reason}."
+
+
+@observe(name="recover_password_tool")
+def recover_password_tool(email: str) -> str:
+    return f"Password recovery instructions will be sent to {email}."
+
+
+@observe(name="edit_account_tool")
+def edit_account_tool(field: str, value: str) -> str:
+    return f"The account field '{field}' is ready to be updated."
+
+
+@observe(name="delete_account_tool")
+def delete_account_tool() -> str:
+    return "Account deletion requires identity verification before completion."
+
+
+@observe(name="newsletter_subscription_tool")
+def newsletter_subscription_tool(action: str) -> str:
+    return f"Newsletter subscription action '{action}' was recorded."
+
+
+@observe(name="complaint_tool")
+def complaint_tool(issue: str) -> str:
+    return f"The complaint was recorded for review: {issue}."
+
+
+@observe(name="review_tool")
+def review_tool(order_id: str, review: str) -> str:
+    return f"Your review for {order_id} was submitted."
+
+
+@observe(name="human_handoff_tool")
+def human_handoff_tool(reason: str) -> str:
+    return f"A support representative will handle this request. Reason: {reason}."
+
+
+TOOL_FUNCTIONS: dict[str, Callable[..., str]] = {
+    name: function
+    for name, function in globals().items()
+    if name.endswith("_tool") and callable(function)
+}
+
+
+def _tool_schema(
+    name: str,
+    description: str,
+    properties: dict[str, dict[str, str]] | None = None,
+    required: list[str] | None = None,
+) -> dict[str, Any]:
+    """Create the schema Groq needs in order to select and call a tool."""
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties or {},
+                "required": required or [],
+            },
+        },
+    }
+
+
+TOOL_SCHEMAS = [
+    _tool_schema(
+        "track_order_tool",
+        "Track an order using its order ID.",
+        {"order_id": {"type": "string", "description": "The order ID."}},
+        ["order_id"],
+    ),
+    _tool_schema(
+        "refund_policy_tool",
+        "Find the refund policy for a product category.",
+        {"category": {"type": "string", "description": "The product category."}},
+        ["category"],
+    ),
+    _tool_schema(
+        "change_address_tool",
+        "Change the delivery address before shipment.",
+        {
+            "order_id": {"type": "string", "description": "The order ID."},
+            "new_address": {"type": "string", "description": "The new delivery address."},
+        },
+        ["order_id", "new_address"],
+    ),
+    _tool_schema(
+        "cancel_order_tool",
+        "Request cancellation of an order before shipment.",
+        {"order_id": {"type": "string", "description": "The order ID."}},
+        ["order_id"],
+    ),
+    _tool_schema(
+        "cancellation_fee_tool",
+        "Check the possible cancellation fee for an order.",
+        {"order_id": {"type": "string", "description": "The order ID."}},
+        ["order_id"],
+    ),
+    _tool_schema(
+        "delivery_estimate_tool",
+        "Find the estimated delivery date for an order.",
+        {"order_id": {"type": "string", "description": "The order ID."}},
+        ["order_id"],
+    ),
+    _tool_schema("delivery_options_tool", "List the available delivery options."),
+    _tool_schema(
+        "get_invoice_tool",
+        "Find the invoice for an order.",
+        {"order_id": {"type": "string", "description": "The order ID."}},
+        ["order_id"],
+    ),
+    _tool_schema(
+        "payment_issue_tool",
+        "Record or investigate a payment issue.",
+        {"issue": {"type": "string", "description": "The payment issue."}},
+        ["issue"],
+    ),
+    _tool_schema("payment_methods_tool", "List the accepted payment methods."),
+    _tool_schema("refund_timeline_tool", "Explain the normal refund processing timeline."),
+    _tool_schema(
+        "track_refund_tool",
+        "Track a refund using its refund ID.",
+        {"refund_id": {"type": "string", "description": "The refund ID."}},
+        ["refund_id"],
+    ),
+    _tool_schema(
+        "return_request_tool",
+        "Create a return request for an order.",
+        {
+            "order_id": {"type": "string", "description": "The order ID."},
+            "reason": {"type": "string", "description": "The return reason."},
+        },
+        ["order_id", "reason"],
+    ),
+    _tool_schema(
+        "recover_password_tool",
+        "Start password recovery for an account.",
+        {"email": {"type": "string", "description": "The account email."}},
+        ["email"],
+    ),
+    _tool_schema(
+        "edit_account_tool",
+        "Prepare an account field for updating.",
+        {
+            "field": {"type": "string", "description": "The account field."},
+            "value": {"type": "string", "description": "The new value."},
+        },
+        ["field", "value"],
+    ),
+    _tool_schema("delete_account_tool", "Start the account deletion process."),
+    _tool_schema(
+        "newsletter_subscription_tool",
+        "Subscribe or unsubscribe a customer from the newsletter.",
+        {"action": {"type": "string", "description": "Subscribe or unsubscribe."}},
+        ["action"],
+    ),
+    _tool_schema(
+        "complaint_tool",
+        "Record a customer complaint.",
+        {"issue": {"type": "string", "description": "The complaint details."}},
+        ["issue"],
+    ),
+    _tool_schema(
+        "review_tool",
+        "Submit a customer review for an order.",
+        {
+            "order_id": {"type": "string", "description": "The order ID."},
+            "review": {"type": "string", "description": "The review text."},
+        },
+        ["order_id", "review"],
+    ),
+    _tool_schema(
+        "human_handoff_tool",
+        "Transfer a request to a human support representative.",
+        {"reason": {"type": "string", "description": "The reason for handoff."}},
+        ["reason"],
+    ),
+]
+
+
+@observe(name="support_agent")
+def support_agent(user_input: str) -> str:
+    """Run the real agent and return its final response."""
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "system",
+            "content": "You are a customer-support agent. Choose the correct available tool when needed, then answer concisely.",
+        },
+        {"role": "user", "content": user_input},
+    ]
+
+    for _ in range(3):
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            tools=TOOL_SCHEMAS,
+            tool_choice="auto",
+            temperature=0,
+        )
+        message = response.choices[0].message
+        tool_calls = message.tool_calls or []
+
+        if not tool_calls:
+            answer = message.content or "The agent did not return an answer."
+            update_current_trace(input=user_input, output=answer)
+            return answer
+
+        messages.append(message.model_dump())
+        for tool_call in tool_calls:
+            tool_name = tool_call.function.name
+            arguments = json.loads(tool_call.function.arguments or "{}")
+            tool_function = TOOL_FUNCTIONS.get(tool_name)
+            if tool_function is None:
+                tool_result = f"Unknown tool: {tool_name}."
+            else:
+                tool_result = tool_function(**arguments)
+            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
+
+    answer = "The agent could not complete the request within the allowed steps."
+    update_current_trace(input=user_input, output=answer)
+    return answer
