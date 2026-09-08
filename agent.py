@@ -5,12 +5,14 @@ support-service implementations for this evaluation project; no test result
 is read from the CSV as the agent's actual tool call.
 """
 
-import json
 import os
 from typing import Any, Callable
 
-from groq import Groq
+from langchain.agents import create_agent
+from langchain_core.tools import StructuredTool
+from langchain_groq import ChatGroq
 from deepeval.tracing import observe, update_current_trace
+from deepeval.integrations.langchain import CallbackHandler
 
 
 MODEL_NAME = os.getenv("AGENT_MODEL", "openai/gpt-oss-20b")
@@ -20,6 +22,19 @@ ORDERS = {
     "ORD-1042": {"status": "Shipped", "eta": "2026-05-13", "category": "electronics"},
     "ORD-2099": {"status": "Delivered", "eta": "2026-05-08", "category": "clothing"},
     "ORD-7777": {"status": "Processing", "eta": "2026-05-15", "category": "food"},
+    # Order fixtures referenced by agentic_metrics_dataset.csv.
+    "ORD1001": {"status": "Processing", "eta": "2026-09-12", "category": "electronics"},
+    "ORD1003": {"status": "Processing", "eta": "2026-09-14", "category": "clothing"},
+    "ORD1004": {"status": "Processing", "eta": "2026-09-15", "category": "electronics"},
+    "ORD1006": {"status": "Shipped", "eta": "2026-09-11", "category": "electronics"},
+    "ORD1007": {"status": "Shipped", "eta": "2026-09-13", "category": "electronics"},
+    "ORD1016": {"status": "Processing", "eta": "2026-09-16", "category": "clothing"},
+    "ORD2001": {"status": "Shipped", "eta": "2026-09-12", "category": "electronics"},
+    "ORD2002": {"status": "Processing", "eta": "2026-09-17", "category": "electronics"},
+    "ORD2003": {"status": "Delivered", "eta": "2026-09-05", "category": "clothing"},
+    "ORD2005": {"status": "Shipped", "eta": "2026-09-10", "category": "electronics"},
+    "ORD2007": {"status": "Delivered", "eta": "2026-09-04", "category": "electronics"},
+    "ORD2033": {"status": "Delivered", "eta": "2026-09-01", "category": "clothing"},
 }
 
 
@@ -278,45 +293,63 @@ TOOL_SCHEMAS = [
 ]
 
 
-@observe(name="support_agent")
+TOOL_DESCRIPTIONS = {
+    schema["function"]["name"]: schema["function"]["description"]
+    for schema in TOOL_SCHEMAS
+}
+
+
+LANGCHAIN_TOOLS = [
+    StructuredTool.from_function(
+        func=TOOL_FUNCTIONS[tool_name],
+        name=tool_name,
+        description=TOOL_DESCRIPTIONS[tool_name],
+    )
+    for tool_name in TOOL_FUNCTIONS
+]
+
+print("LangChain tools registered:", len(LANGCHAIN_TOOLS))
+
+
+llm = ChatGroq(
+    model=MODEL_NAME,
+    temperature=0,
+)
+
+
+langchain_agent = create_agent(
+    model=llm,
+    tools=LANGCHAIN_TOOLS,
+    system_prompt=(
+        "You are a customer-support agent. "
+        "Choose the correct tool when needed and answer concisely."
+    ),
+)
+
+print("LangChain Groq agent created.")
+
+
 def support_agent(user_input: str) -> str:
-    """Run the real agent and return its final response."""
-    client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    messages: list[dict[str, Any]] = [
+    """Run the LangChain agent and return its final response."""
+    callback_handler = CallbackHandler()
+
+    result = langchain_agent.invoke(
         {
-            "role": "system",
-            "content": "You are a customer-support agent. Choose the correct available tool when needed, then answer concisely.",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": user_input,
+                }
+            ]
         },
-        {"role": "user", "content": user_input},
-    ]
+        config={"callbacks": [callback_handler]},
+    )
 
-    for _ in range(3):
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages,
-            tools=TOOL_SCHEMAS,
-            tool_choice="auto",
-            temperature=0,
-        )
-        message = response.choices[0].message
-        tool_calls = message.tool_calls or []
+    answer = result["messages"][-1].content
 
-        if not tool_calls:
-            answer = message.content or "The agent did not return an answer."
-            update_current_trace(input=user_input, output=answer)
-            return answer
+    update_current_trace(
+        input=user_input,
+        output=answer,
+    )
 
-        messages.append(message.model_dump())
-        for tool_call in tool_calls:
-            tool_name = tool_call.function.name
-            arguments = json.loads(tool_call.function.arguments or "{}")
-            tool_function = TOOL_FUNCTIONS.get(tool_name)
-            if tool_function is None:
-                tool_result = f"Unknown tool: {tool_name}."
-            else:
-                tool_result = tool_function(**arguments)
-            messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
-
-    answer = "The agent could not complete the request within the allowed steps."
-    update_current_trace(input=user_input, output=answer)
     return answer
