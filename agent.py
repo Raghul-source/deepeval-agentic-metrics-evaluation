@@ -344,11 +344,9 @@ langchain_agent = create_agent(
 print("LangChain Groq agent created.")
 
 
-deepeval_callback = CallbackHandler()
-
-
 def support_agent(user_input: str) -> str:
     """Run the LangChain agent and return its final response."""
+    deepeval_callback = CallbackHandler()
     result = langchain_agent.invoke(
         {
             "messages": [
@@ -366,23 +364,10 @@ def support_agent(user_input: str) -> str:
     tool_calls = []
     for message in result["messages"]:
         for call in getattr(message, "tool_calls", []) or []:
-            matching_result = next(
-                (
-                    tool_message
-                    for tool_message in result["messages"]
-                    if getattr(tool_message, "tool_call_id", None) == call.get("id")
-                ),
-                None,
-            )
             tool_calls.append(
                 ToolCall(
                     name=call["name"],
                     input_parameters=call.get("args", {}),
-                    output=(
-                        getattr(matching_result, "content", None)
-                        if matching_result is not None
-                        else None
-                    ),
                 )
             )
 
@@ -392,4 +377,10 @@ def support_agent(user_input: str) -> str:
         tools_called=tool_calls,
     )
 
+    # Expose the automatically extracted calls to the notebook component span.
+    support_agent.last_tools_called = tool_calls
+
     return answer
+
+
+support_agent.last_tools_called = []
