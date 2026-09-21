@@ -1,0 +1,30 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260921203051
+Username: DESKTOP-GMT8F1L\Raghul mani M
+RunAs User: DESKTOP-GMT8F1L\Raghul mani M
+Configuration Name: 
+Machine: DESKTOP-GMT8F1L (Microsoft Windows NT 10.0.26200.0)
+Host Application: powershell
+Process ID: 21620
+PSVersion: 5.1.26100.9444
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.9444
+BuildVersion: 10.0.26100.9444
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+Transcript started, output file is smoke_test_log.txt
+PS C:\workspace\artelligence\playground\agents\operation\deepeval-agentic-metrics-evaluation\open_source_agent_under_test> python main.py
+
+Once I have this information, I’ll confirm the duplicate charge and issue a refund within 7 days of the original purchase, as per our refund policy. If you have any questions or need furth
+er assistance, feel free to let me know.
+
+Thank you for your cooperation and patience!
+PS C:\workspace\artelligence\playground\agents\operation\deepeval-agentic-metrics-evaluation\open_source_agent_under_test> Stop-Transcript
+**********************
+Windows PowerShell transcript end
+End time: 20260921203248
+**********************
