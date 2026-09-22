@@ -172,4 +172,39 @@ When a developer hands you `models.py`, check these exact three things:
   - **QA Action:** Map out all decision points and write separate test cases for **every possible path** (e.g., testing both branches of the approval gate).
 - **Inspect Persistence & SQLite Connection:**
   - **Script lines:** `conn = sqlite3.connect(db_path, check_same_thread=False)`, `checkpointer = SqliteSaver(conn)`
-  - **QA Action:** Confirm SQLite persistence is present to support state capture and human-in-the-loop pause/resumption testing. *(Note: `check_same_thread=False` only allows the connection to be shared across threads; it does not automatically make parallel test execution safe from race conditions.)*
+- **QA Action:** Confirm SQLite persistence is present to support state capture and human-in-the-loop pause/resumption testing. *(Note: `check_same_thread=False` only allows the connection to be shared across threads; it does not automatically make parallel test execution safe from race conditions.)*
+
+## Knowledge Base File (`knowledge_base.py`) Inspection Checklist & Notes
+
+### What This File Does
+
+- **Stores Support Policies:** Holds hardcoded reference articles (`KNOWLEDGE_BASE`) containing an `id`, `category`, `title`, and `content`.
+- **Executes Scoring & Retrieval:** Implements `simple_retrieve()` to score articles via category matching and keyword overlap, sorting and returning the top-$k$ results (`top_k=3`) to the graph state (`retrieved_docs`) for the resolution node.
+
+---
+
+### What a QA Engineer Needs to Inspect
+
+- **Inspect Categories vs. Model Literals:**
+  - **Script lines:** `KNOWLEDGE_BASE` article dictionaries containing `"category": "..."`
+  - **QA Action:** Ensure every category defined here matches the allowed string Literals in `models.py` and your test cases. If they don't match, retrieval still works, but the article does not receive the `+3` category-match bonus.
+
+- **Inspect Scoring Logic (Category Comparison & Weighting):**
+  - **Script lines:** `if doc["category"] == category: score += 3`
+  - **QA Action:** Understand that the script compares the ticket category against the article category, adding an artificial weight of `+3` to prioritize category matches over pure keyword text matching.
+
+- **Inspect Keyword Overlap & Word Matching:**
+  - **Script lines:**
+
+```python
+query_words = set(query.lower().split())
+content_words = set((doc["title"] + " " + doc["content"]).lower().split())
+overlap = len(query_words.intersection(content_words))
+score += overlap
+```
+
+  - **QA Action:** Ensure test queries share actual words with KB articles to accumulate score points. *(Note: This simplified custom script blindly counts all matching words including common filler words like "a", "the", or "is" without stop-word removal).*
+
+- **Inspect Output Limits (Top-K & Filtering):**
+  - **Script lines:** `docs = [doc for score, doc in scored if score > 0][:top_k]` where `top_k = 3`
+  - **QA Action:** Verify that articles with a score of zero (completely irrelevant) are dropped, and ensure test assertions expect a maximum of 3 retrieved documents (`top_k = 3`).
