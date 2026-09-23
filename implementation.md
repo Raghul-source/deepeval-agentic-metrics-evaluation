@@ -207,4 +207,156 @@ score += overlap
 
 - **Inspect Output Limits (Top-K & Filtering):**
   - **Script lines:** `docs = [doc for score, doc in scored if score > 0][:top_k]` where `top_k = 3`
-  - **QA Action:** Verify that articles with a score of zero (completely irrelevant) are dropped, and ensure test assertions expect a maximum of 3 retrieved documents (`top_k = 3`).
+- **QA Action:** Verify that articles with a score of zero (completely irrelevant) are dropped, and ensure test assertions expect a maximum of 3 retrieved documents (`top_k = 3`).
+
+## LLM Helpers File (`llm_helpers.py`) Inspection Checklist & Notes
+
+### What This File Does
+
+- **Binds Structured Outputs:** Uses the shared LLM client from `config.py` to force LLM responses into specific Pydantic schemas (`TicketClassification` and `ResolutionDecision`).
+- **Implements LLM Helper Functions:** Defines `classify_with_llm()` to parse raw customer messages into structured classification data and `resolve_with_llm()` to combine state data, retrieved knowledge base articles, and safety rules into an LLM prompt for resolution drafting.
+
+---
+
+### What a QA Engineer Needs to Inspect
+
+- **Inspect Structured Output Binding & Schema Alignment:**
+  - **Script lines:**
+
+```python
+classifier = llm.with_structured_output(TicketClassification)
+resolver = llm.with_structured_output(ResolutionDecision)
+```
+
+  - **QA Action:** Verify that the wrapper models (`TicketClassification`, `ResolutionDecision`) match the master Pydantic class definitions in `models.py`. If field names mismatch, LLM parsing will crash during test execution.
+
+- **Inspect Classification Prompt & Execution:**
+  - **Script lines:**
+
+```python
+def classify_with_llm(customer_message: str) -> TicketClassification:
+    prompt = f"...\nTicket:\n{customer_message}"
+    return classifier.invoke(prompt)
+```
+
+  - **QA Action:** Verify that raw customer message strings are passed directly into the prompt template and that `.invoke(prompt)` correctly returns a structured classification object.
+
+- **Inspect Resolution Context Mapping & State Fields:**
+  - **Script lines:**
+
+```python
+kb_text = "\n\n".join([...])
+prompt = f"...\nCustomer ID: {state.get('customer_id', '')}\nMessage: {state.get('customer_message', '')}\n..."
+return resolver.invoke(prompt)
+```
+
+  - **QA Action:** Verify that every required state field (`customer_id`, `customer_message`, `category`, `intent`, `priority`, `sentiment`, `approval_notes`, and `retrieved_docs`) is correctly extracted from `SupportState` and injected into the prompt so the LLM has full context to write a response.
+
+  - `retrieved_docs` is converted into `kb_text`, and `kb_text` is injected into the prompt.
+
+- **Inspect Escalation Rules & Automated Human Review Triggers:**
+  - **Script lines:**
+
+```python
+# Rules in resolver prompt:
+# - If the issue involves security risk, missing verification, locked account, legal risk,
+#   or insufficient information, set needs_escalation=true.
+```
+
+  - **QA Action:** Write test cases targeting these specific risk conditions, such as locked accounts or insufficient information, to verify that the LLM automatically sets `needs_escalation=True`.
+
+  - When `needs_escalation=True`, the flow is:
+
+```text
+resolver
+→ draft_resolution
+→ final_review_gate
+→ route_resolution_or_escalation()
+→ escalate_case
+```
+
+  This routes the ticket to escalation through the final review flow, not the first `approval_gate`.
+
+## Nodes and Execution Logic File (`nodes.py`) Inspection Checklist & Notes
+
+### What This File Does
+
+- **Defines Workflow Execution Logic:** Contains all core processing functions (nodes) that execute sequentially or conditionally when the agent runs.
+- **Manages Human-in-the-Loop Gates:** Uses LangGraph's `interrupt()` function to pause execution and request human review at critical checkpoints (`approval_gate` and `final_review_gate`).
+- **Executes Routing & Retrieval Integration:** Handles classification routing, calls `simple_retrieve()`, and manages resolution or escalation outcomes.
+
+---
+
+### What a QA Engineer Needs to Inspect
+
+- **Inspect Classification Routing (`classify_ticket`):**
+
+  - **Script lines:**
+
+    ```python
+    result = classify_with_llm(state["customer_message"])
+    initial_route = "retrieve" if result.intent in routable_intents else "escalate"
+    ```
+
+  - **QA Action:** Verify that customer messages are correctly passed to the LLM classifier and that valid intents route to knowledge retrieval while unhandled intents route straight to escalation.
+
+- **Inspect Human-in-the-Loop Gates (`approval_gate` and `final_review_gate`):**
+
+  - **First gate (`approval_gate`) checks:**
+
+    ```python
+    state.get("priority") in ["high", "urgent"]
+    or state.get("classification_confidence", 0) < 0.70
+    or state.get("category") in ["billing", "account"]
+    ```
+
+  - **Final gate (`final_review_gate`) checks:**
+
+    ```python
+    state.get("needs_escalation", False)
+    or state.get("resolution_confidence", 0) < 0.80
+    or state.get("priority") in ["high", "urgent"]
+    or state.get("category") in ["billing", "account"]
+    ```
+
+  - **QA Action:** Test boundary conditions for automatic versus manual reviews. Verify that high priorities, low confidence, or sensitive categories trigger `interrupt()` and wait for internal human operator input such as approve, edit, or escalate.
+
+- **Inspect Knowledge Retrieval Integration (`retrieve_knowledge`):**
+
+  - **Script lines:**
+
+    ```python
+    docs = simple_retrieve(
+        query=state["customer_message"],
+        category=state.get("category", "general"),
+        top_k=3,
+    )
+    ```
+
+  - **QA Action:** Confirm that the customer message and category are correctly forwarded to `simple_retrieve()` and stored in `state["retrieved_docs"]` for downstream LLM resolution.
+
+- **Inspect Resolution and Escalation State Writing (`draft_resolution`, `final_review_gate`, `route_resolution_or_escalation`, and `escalate_case`):**
+
+  - **Script lines:**
+
+    ```python
+    decision = resolve_with_llm(state)
+    ```
+
+    ```python
+    escalation_msg = (
+        "Your case has been escalated to a human support specialist. "
+        f"Reason: {state.get('escalation_reason', 'Needs manual review')}."
+    )
+    ```
+
+  - **QA Action:** Verify that LLM resolution decisions, draft responses, and escalation flags are correctly saved back to the state dictionary. Test escalation paths to ensure response messages include the specific escalation reason, or use `Needs manual review` when no reason is available.
+
+  - When `needs_escalation=True`, the flow is:
+
+    ```text
+    draft_resolution
+    → final_review_gate
+    → route_resolution_or_escalation()
+    → escalate_case
+    ```
