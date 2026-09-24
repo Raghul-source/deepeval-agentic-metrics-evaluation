@@ -1,0 +1,11 @@
+test_id,customer_message,expected_category,expected_intent,expected_route,expected_final_result,expected_escalation
+OS_AGENT_TC_001,"I was charged twice for my subscription and want a refund.",billing,payment_issue,retrieve,"Explain the duplicate-charge verification and refund next steps.",false
+OS_AGENT_TC_002,"Can I get a refund for a product I purchased 15 days ago?",billing,refund_request,retrieve,"Explain the refund-policy requirements and ask for any missing details.",false
+OS_AGENT_TC_003,"My application crashes whenever I try to upload a document.",technical,bug_report,retrieve,"Acknowledge the bug, request useful diagnostic details, and provide troubleshooting guidance.",false
+OS_AGENT_TC_004,"Where is my order and when should it arrive?",order,order_status,retrieve,"Provide order-status guidance and the next tracking step.",false
+OS_AGENT_TC_005,"I forgot my password and cannot log in.",account,password_reset,retrieve,"Provide safe password-recovery guidance and request required verification details.",true
+OS_AGENT_TC_006,"Please help me with my account.",account,account_access,retrieve,"Ask for the missing account details needed to identify the issue safely.",true
+OS_AGENT_TC_007,"I need help with something that is not covered by the support policies.",general,other,escalate,"Explain that the request needs human-support review.",true
+OS_AGENT_TC_008,"I believe someone accessed my account without permission.",account,account_access,retrieve,"Treat the security concern as high risk and route it for human review or escalation.",true
+OS_AGENT_TC_009,"This is urgent: I was charged for a service I did not authorize.",billing,payment_issue,retrieve,"Acknowledge the urgent payment concern and request verification before resolution.",true
+OS_AGENT_TC_010,"Can you explain how the service works?",general,general_question,retrieve,"Provide a clear general explanation or ask a focused clarification question.",false
