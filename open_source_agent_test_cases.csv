@@ -1,5 +1,5 @@
 test_id,customer_message,expected_category,expected_intent,expected_route,expected_final_result,expected_escalation
-OS_AGENT_TC_001,"I was charged twice for my subscription and want a refund.",billing,payment_issue,retrieve,"Explain the duplicate-charge verification and refund next steps.",false
+OS_AGENT_TC_001,"I was charged twice for my subscription and want a refund.",billing,refund_request,retrieve,"Explain the duplicate-charge verification and refund next steps.",false
 OS_AGENT_TC_002,"Can I get a refund for a product I purchased 15 days ago?",billing,refund_request,retrieve,"Explain the refund-policy requirements and ask for any missing details.",false
 OS_AGENT_TC_003,"My application crashes whenever I try to upload a document.",technical,bug_report,retrieve,"Acknowledge the bug, request useful diagnostic details, and provide troubleshooting guidance.",false
 OS_AGENT_TC_004,"Where is my order and when should it arrive?",order,order_status,retrieve,"Provide order-status guidance and the next tracking step.",false

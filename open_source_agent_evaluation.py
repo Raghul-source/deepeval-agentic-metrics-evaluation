@@ -12,7 +12,6 @@ from deepeval.evaluate import AsyncConfig, ErrorConfig
 from deepeval.metrics import TaskCompletionMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.dataset import EvaluationDataset, Golden
-from deepeval.tracing import trace_manager
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(PROJECT_ROOT / "open_source_agent_under_test" / ".env")
@@ -48,6 +47,9 @@ class GroqDeepEvalModel(DeepEvalBaseLLM):
             include_reasoning=False,
         )
 
+        print("Finish reason:", response.choices[0].finish_reason)
+        print("Usage:", response.usage)
+
         raw_response = response.choices[0].message.content or ""
         start = raw_response.find("{")
         end = raw_response.rfind("}")
@@ -76,48 +78,6 @@ def load_dataset(path: str = "open_source_agent_test_cases.csv"):
     return rows, EvaluationDataset(goldens=goldens)
 
 
-def collect_metric_data(value, test_case_number, path="trace"):
-    """Extract metric name, score, success, and reason from a trace result."""
-    if hasattr(value, "model_dump"):
-        value = value.model_dump()
-    elif hasattr(value, "dict") and not isinstance(value, dict):
-        value = value.dict()
-    elif hasattr(value, "__dict__"):
-        value = vars(value)
-
-    if isinstance(value, dict):
-        metric_data = value.get("metrics_data")
-        if isinstance(metric_data, list):
-            for metric in metric_data:
-                if hasattr(metric, "model_dump"):
-                    metric = metric.model_dump()
-                elif hasattr(metric, "dict") and not isinstance(metric, dict):
-                    metric = metric.dict()
-                elif hasattr(metric, "__dict__"):
-                    metric = vars(metric)
-
-                if isinstance(metric, dict):
-                    evaluation_results.append(
-                        {
-                            "test_case": test_case_number,
-                            "span": path,
-                            "metric": metric.get("name"),
-                            "score": metric.get("score"),
-                            "success": metric.get("success"),
-                            "reason": metric.get("reason"),
-                        }
-                    )
-
-        for key, child in value.items():
-            collect_metric_data(child, test_case_number, f"{path}.{key}")
-    elif isinstance(value, list):
-        for child_index, child in enumerate(value):
-            collect_metric_data(child, test_case_number, f"{path}[{child_index}]")
-
-
-evaluation_results = []
-
-
 def run_evaluation():
     """Run every Stage 7 case once through the real traced agent."""
     groq_model = GroqDeepEvalModel()
@@ -139,10 +99,23 @@ def run_evaluation():
         start=1,
     ):
         row = rows[index - 1]
-        state = run_open_source_agent(
-            customer_id=f"QA_{row['test_id']}",
-            customer_message=golden.input,
-        )
+        # state = run_open_source_agent(
+        #    customer_id=f"QA_{row['test_id']}",
+        #    customer_message=golden.input,
+        #)
+
+        try:
+            state = run_open_source_agent(
+                customer_id=f"QA_{row['test_id']}",
+                customer_message=golden.input,
+            )
+        except Exception as exc:
+            print("\n--- RAW GROQ ERROR ---")
+            print("Error type:", type(exc).__name__)
+            print("Error body:", repr(getattr(exc, "body", None)))
+            print("Full error:", repr(str(exc)))
+            raise
+
 
         expected_escalation = row["expected_escalation"].strip().lower() == "true"
         actual_category = state.get("category", "")
@@ -157,10 +130,6 @@ def run_evaluation():
             "escalation_match": actual_escalation == expected_escalation,
         }
         failed_checks = [name for name, passed in checks.items() if not passed]
-
-        traces = trace_manager.get_all_traces_dict()
-        latest_trace = traces[-1] if isinstance(traces, list) else traces
-        collect_metric_data(latest_trace, index)
 
         results.append(
             {
@@ -184,8 +153,6 @@ def run_evaluation():
 
     print("Agent execution results:")
     print(pd.DataFrame(results).to_string(index=False))
-    print("Metric results:")
-    print(pd.DataFrame(evaluation_results).to_string(index=False))
     failed_cases = [result for result in results if result["failed_checks"]]
     print(f"QA cases with deterministic mismatches: {len(failed_cases)}")
     for result in failed_cases:
