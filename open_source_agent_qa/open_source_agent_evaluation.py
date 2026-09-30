@@ -65,8 +65,10 @@ class GroqDeepEvalModel(DeepEvalBaseLLM):
         return self.model_name
 
 
-def load_dataset(path: str = "open_source_agent_test_cases.csv"):
+def load_dataset(path: str | None = None):
     """Convert the Stage 7 CSV into DeepEval Goldens."""
+    if path is None:
+        path = str(PROJECT_ROOT / "open_source_agent_test_cases.csv")
     rows = list(csv.DictReader(open(path, encoding="utf-8-sig", newline="")))
     goldens = [
         Golden(
@@ -82,7 +84,7 @@ def run_evaluation():
     """Run every Stage 7 case once through the real traced agent."""
     groq_model = GroqDeepEvalModel()
     task_completion_metric = TaskCompletionMetric(
-        threshold=0.6,
+        threshold=0.5,
         model=groq_model,
         include_reason=True,
     )

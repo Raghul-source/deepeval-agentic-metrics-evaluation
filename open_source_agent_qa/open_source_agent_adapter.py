@@ -53,7 +53,7 @@ def _capture_execution_path(graph, config: dict) -> list[str]:
 def run_open_source_agent(
     customer_id: str,
     customer_message: str,
-    db_path: str = "open_source_agent_checkpoints.db",
+    db_path: str | None = None,
     review_decisions: dict | None = None,
 ):
     """Run the original agent and resume its human-review interruptions.
@@ -73,6 +73,9 @@ def run_open_source_agent(
     The returned state contains ``_review_events`` for later evaluation and
     debugging.
     """
+    if db_path is None:
+        db_path = str(PROJECT_ROOT / "open_source_agent_checkpoints.db")
+
     graph = build_graph(db_path=db_path)
 
     thread_id = f"{customer_id}-{uuid.uuid4().hex[:8]}"

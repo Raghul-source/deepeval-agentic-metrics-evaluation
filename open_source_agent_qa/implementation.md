@@ -83,6 +83,33 @@ PlanAdherenceMetric
 PlanQualityMetric
 ```
 
+### Evaluation comparison method
+
+The evaluation uses the expected values in the CSV in two ways.
+
+#### DeepEval comparison
+
+`expected_final_result` is passed to `TaskCompletionMetric` and compared with
+the agent's actual `final_response`. DeepEval judges whether the final response
+fulfills the expected behavior and returns a score, success status, and reason.
+
+#### Direct state comparisons
+
+The evaluation script directly compares these expected CSV columns with the
+corresponding values returned in the agent state:
+
+| Expected CSV column | Actual agent value |
+| --- | --- |
+| `expected_category` | `category` |
+| `expected_intent` | `intent` |
+| `expected_route` | `initial_route` |
+| `expected_escalation` | `needs_escalation` |
+
+`expected_final_result` is evaluated by DeepEval. The other four expected
+columns are checked directly. A test case has a deterministic mismatch when
+any direct comparison fails. A test case can also fail the metric evaluation
+when the `TaskCompletionMetric` score is below its threshold of `0.60`.
+
 12. Record for every test case:
 
 ```text
