@@ -9,7 +9,7 @@ import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
 from deepeval.evaluate import AsyncConfig, ErrorConfig
-from deepeval.metrics import TaskCompletionMetric
+from deepeval.metrics import StepEfficiencyMetric, TaskCompletionMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.dataset import EvaluationDataset, Golden
 
@@ -88,13 +88,20 @@ def run_evaluation():
         model=groq_model,
         include_reason=True,
     )
+    step_efficiency_metric = StepEfficiencyMetric(
+        threshold=0.5,
+        model=groq_model,
+        include_reason=True,
+        async_mode=False,
+        eval_mode="llm",
+    )
 
     rows, dataset = load_dataset()
     results = []
 
     for index, golden in enumerate(
         dataset.evals_iterator(
-            metrics=[task_completion_metric],
+            metrics=[task_completion_metric, step_efficiency_metric],
             error_config=ErrorConfig(ignore_errors=False),
             async_config=AsyncConfig(run_async=False),
         ),

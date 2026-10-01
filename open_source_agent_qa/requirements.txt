@@ -1,0 +1,12 @@
+# Dependencies required by the open-source agent
+langgraph
+langgraph-checkpoint-sqlite
+langchain
+langchain-groq
+groq
+pydantic
+python-dotenv
+
+# Dependencies required by the QA evaluation
+deepeval
+pandas

@@ -82,13 +82,18 @@ This section evaluates the [LangGraph Customer Support Agent](https://github.com
 
 ### Open-Source QA Files
 
-- `open_source_agent_under_test/` — cloned open-source agent being tested.
-- `open_source_agent_adapter.py` — calls the agent and handles review interruptions.
-- `open_source_agent_evaluation.py` — runs the DeepEval evaluation.
-- `open_source_agent_test_cases.csv` — contains the QA test cases and expected behavior.
-- `agent_behavior_matrix.md` — extracts the allowed categories and intents, intent-to-route rules, knowledge-base policies, human-review conditions, escalation rules, reusable QA scenarios, and expected-value validation checklist.
-- `evaluation_output.txt` — records the latest evaluation scores, reasons, and mismatches.
-- `smoke_test_log.txt` — records the initial smoke-test execution.
+- `open_source_agent_qa/open_source_agent_under_test/` — cloned open-source agent being tested.
+- `open_source_agent_qa/open_source_agent_adapter.py` — calls the agent and handles review interruptions.
+- `open_source_agent_qa/open_source_agent_evaluation.py` — runs the DeepEval evaluation.
+- `open_source_agent_qa/open_source_agent_test_cases.csv` — contains the QA test cases and expected behavior.
+- `open_source_agent_qa/agent_behavior_matrix.md` — extracts the allowed categories and intents, intent-to-route rules, knowledge-base policies, human-review conditions, escalation rules, reusable QA scenarios, and expected-value validation checklist.
+- `open_source_agent_qa/evaluation_output.txt` — records the latest evaluation scores, reasons, and mismatches.
+- `open_source_agent_qa/smoke_test_log.txt` — records the initial smoke-test execution.
+- `open_source_agent_qa/implementation.md` — implementation plan and source-code inspection notes.
+- `open_source_agent_qa/learning.md` — learning notes about the professional QA process.
+- `open_source_agent_qa/smoke_testing_flow.md` — smoke-test steps and recorded observations.
+- `open_source_agent_qa/requirements.txt` — installs the agent and QA evaluation dependencies.
+- `open_source_agent_qa/.env.example` — shows the required environment variable using a dummy API-key value.
 
 ### Open-Source QA Workflow
 
@@ -131,3 +136,13 @@ python .\open_source_agent_evaluation.py
 ```
 
 The real `.env` file is ignored and must not be committed. `.env.example` contains only a dummy placeholder.
+
+### Installation
+
+From the repository root, run:
+
+```powershell
+python -m pip install -r .\open_source_agent_qa\requirements.txt
+```
+
+This installs the open-source agent and QA evaluation dependencies.
