@@ -33,24 +33,34 @@ class GroqDeepEvalModel(DeepEvalBaseLLM):
         print("Prompt characters:", len(prompt))
         print("Approximate prompt tokens:", len(prompt) // 4)
 
+        system_message = "Return one compact valid JSON object only."
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ]
+        requested_schema = kwargs.get("schema")
+
+        print("Request model:", self.model_name)
+        print("Request max_tokens:", 1024)
+        print("Request schema:", repr(requested_schema))
+        print("Request system message:", repr(system_message))
+        print("Request user prompt:", repr(prompt))
+
         response = self.client.chat.completions.create(
             model=self.model_name,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Return one compact valid JSON object only.",
-                },
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             temperature=0,
-            max_tokens=512,
+            max_tokens=1024,
             include_reasoning=False,
         )
 
         print("Finish reason:", response.choices[0].finish_reason)
         print("Usage:", response.usage)
+        print("Raw Groq response:", repr(response))
+        print("Raw Groq message:", repr(response.choices[0].message))
 
         raw_response = response.choices[0].message.content or ""
+        print("Raw Groq content:", repr(raw_response))
         start = raw_response.find("{")
         end = raw_response.rfind("}")
         if start == -1 or end == -1:
