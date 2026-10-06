@@ -15,6 +15,15 @@ from src.knowledge_base import simple_retrieve
 from src.llm_helpers import classify_with_llm, resolve_with_llm
 # import functions that call the LLM to classify and draft resolutions
 
+
+def _record_step(state: SupportState, node_name: str) -> list[str]:
+    """Return the execution path with the current node appended once."""
+    execution_path = list(state.get("execution_path", []))
+    if not execution_path or execution_path[-1] != node_name:
+        execution_path.append(node_name)
+    return execution_path
+
+
 # ─────────────────────────────────────────────
 # Node: classify_ticket
 # ─────────────────────────────────────────────
@@ -49,6 +58,7 @@ def classify_ticket(state: SupportState) -> SupportState:
         "classification_rationale": result.rationale,
         "initial_route": initial_route,
         "status": "classified",
+        "execution_path": _record_step(state, "classify_ticket"),
     }
     # return an updated state dictionary with classification results and a routing hint
 
@@ -75,6 +85,7 @@ def approval_gate(state: SupportState) -> SupportState:
             "approval_decision": "approved",
             "approval_notes": "Auto-approved: low-risk case",
             "status": "routing_approved",
+            "execution_path": _record_step(state, "approval_gate"),
         }
     # if no human gate needed, auto-approve and return updated state
 
@@ -111,6 +122,7 @@ def approval_gate(state: SupportState) -> SupportState:
         "approval_decision": decision,
         "approval_notes": notes,
         "status": "routing_reviewed",
+        "execution_path": _record_step(state, "approval_gate"),
     }
     # return the human's decision and notes in the state
 
@@ -149,6 +161,7 @@ def retrieve_knowledge(state: SupportState) -> SupportState:
     return {
         "retrieved_docs": docs,
         "status": "knowledge_retrieved",
+        "execution_path": _record_step(state, "retrieve_knowledge"),
     }
     # put the retrieved docs into state and mark status
 
@@ -168,6 +181,7 @@ def draft_resolution(state: SupportState) -> SupportState:
         "escalation_reason": decision.escalation_reason,
         "resolution_confidence": decision.confidence,
         "status": "draft_ready",
+        "execution_path": _record_step(state, "draft_resolution"),
     }
     # store the LLM's draft and flags in the state
 
@@ -193,6 +207,7 @@ def final_review_gate(state: SupportState) -> SupportState:
         return {
             "final_response": state.get("draft_response", ""),
             "status": "approved_final_response",
+            "execution_path": _record_step(state, "final_review_gate"),
         }
     # if no review needed, finalize the draft as the final response
 
@@ -232,6 +247,7 @@ def final_review_gate(state: SupportState) -> SupportState:
             ).strip(),
             "needs_escalation": False,
             "status": "approved_final_response",
+            "execution_path": _record_step(state, "final_review_gate"),
         }
     # if the reviewer edited, use the edited response, append review notes, and mark approved
 
@@ -241,6 +257,7 @@ def final_review_gate(state: SupportState) -> SupportState:
             "escalation_reason": notes
             or state.get("escalation_reason", "Human reviewer requested escalation"),
             "status": "review_requested_escalation",
+            "execution_path": _record_step(state, "final_review_gate"),
         }
     # if the reviewer chose to escalate, set escalation flags and reason
 
@@ -251,6 +268,7 @@ def final_review_gate(state: SupportState) -> SupportState:
             state.get("approval_notes", "") + f" | final review notes: {notes}"
         ).strip(),
         "status": "approved_final_response",
+        "execution_path": _record_step(state, "final_review_gate"),
     }
     # otherwise, treat it as approved and attach any notes
 
@@ -278,6 +296,7 @@ def resolve_case(state: SupportState) -> SupportState:
     return {
         "status": "resolved",
         "final_response": state.get("final_response", state.get("draft_response", "")),
+        "execution_path": _record_step(state, "resolve_case"),
     }
     # set status to resolved and set final_response from final_response or draft
 
@@ -297,5 +316,6 @@ def escalate_case(state: SupportState) -> SupportState:
     return {
         "status": "escalated",
         "final_response": escalation_msg,
+        "execution_path": _record_step(state, "escalate_case"),
     }
     # mark the state as escalated and include the escalation message

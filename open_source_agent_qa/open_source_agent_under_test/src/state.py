@@ -70,3 +70,6 @@ class SupportState(TypedDict, total=False):
     # ── Bookkeeping ──
     status: str
     # short status string for where the case is in the flow
+
+    execution_path: List[str]
+    # workflow node names executed during the graph run

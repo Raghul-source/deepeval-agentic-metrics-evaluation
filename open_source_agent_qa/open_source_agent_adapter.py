@@ -126,11 +126,12 @@ def run_open_source_agent(
         result = graph.invoke(Command(resume=human_reply), config=config)
 
     completed_state = dict(result)
-    execution_path = _capture_execution_path(graph, config)
+    execution_path = list(completed_state.get("execution_path", []))
+    if not execution_path:
+        execution_path = _capture_execution_path(graph, config)
 
-    # Checkpoint metadata normally contains every node. Add the interrupted
-    # gate explicitly as a fallback because an interrupt can occur before the
-    # gate writes its normal state update.
+    # Add interrupted gates as a fallback for older runs where execution_path
+    # was not written directly by the node functions.
     for event in review_events:
         node_name = event.get("node")
         if node_name and node_name not in execution_path:
