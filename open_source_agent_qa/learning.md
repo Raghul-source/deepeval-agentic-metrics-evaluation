@@ -16,13 +16,10 @@ Plan:
    - unnecessary tool calls
    - incomplete final answers
 6. Connect DeepEval to the agent’s real tracing/callback system.
-7. Evaluate the agent using:
+7. Evaluate the agent using the current open-source QA checks:
    - `TaskCompletionMetric`
-   - `ToolCorrectnessMetric`
-   - `ArgumentCorrectnessMetric`
-   - `StepEfficiencyMetric`
-   - `PlanAdherenceMetric`
-   - `PlanQualityMetric`
+   - direct expected-vs-actual state checks
+   - custom trajectory evaluation
 8. Record the score, reason, actual tool calls, and failed test cases.
 9. Analyse each failure and identify the root cause.
 10. Document the defects and recommended fixes in the README.

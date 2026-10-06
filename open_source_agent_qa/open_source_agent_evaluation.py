@@ -9,7 +9,7 @@ import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
 from deepeval.evaluate import AsyncConfig, ErrorConfig
-from deepeval.metrics import StepEfficiencyMetric, TaskCompletionMetric
+from deepeval.metrics import TaskCompletionMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.dataset import EvaluationDataset, Golden
 
@@ -148,17 +148,6 @@ def run_evaluation():
         model=groq_model,
         include_reason=True,
     )
-    # Disabled for the active run: the built-in StepEfficiencyMetric is
-    # referenceless and can fail on Groq before our trajectory table prints.
-    # Keep it here only for later experimental/secondary analysis.
-    # step_efficiency_metric = StepEfficiencyMetric(
-    #     threshold=0.5,
-    #     model=groq_model,
-    #     include_reason=True,
-    #     async_mode=False,
-    #     eval_mode="llm",
-    # )
-
     rows, dataset = load_dataset()
     results = []
 
@@ -264,8 +253,7 @@ def run_evaluation():
     print("Trajectory evaluation results:")
     print(results_df[trajectory_columns].to_string(index=False))
     print(
-        "Note: trajectory_match is the project-specific workflow check. "
-        "Built-in StepEfficiencyMetric output is secondary observation only."
+        "Note: trajectory_match is the project-specific workflow-path check."
     )
 
     failed_cases = [result for result in results if result["failed_checks"]]

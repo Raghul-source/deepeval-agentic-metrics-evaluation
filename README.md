@@ -87,7 +87,7 @@ This section evaluates the [LangGraph Customer Support Agent](https://github.com
 - `open_source_agent_qa/open_source_agent_evaluation.py` — runs the DeepEval evaluation.
 - `open_source_agent_qa/open_source_agent_test_cases.csv` — contains the QA test cases and expected behavior.
 - `open_source_agent_qa/agent_behavior_matrix.md` — extracts the allowed categories and intents, intent-to-route rules, knowledge-base policies, human-review conditions, escalation rules, reusable QA scenarios, and expected-value validation checklist.
-- `open_source_agent_qa/evaluation_output.txt` — records the latest evaluation scores, reasons, and mismatches.
+- `open_source_agent_qa/evaluation_output.txt` — contains a saved evaluation run.
 - `open_source_agent_qa/smoke_test_log.txt` — records the initial smoke-test execution.
 - `open_source_agent_qa/implementation.md` — implementation plan and source-code inspection notes.
 - `open_source_agent_qa/learning.md` — learning notes about the professional QA process.
@@ -105,6 +105,7 @@ QA test case
 → captured state and workflow path
 → DeepEval TaskCompletionMetric
 → direct category, intent, route, and escalation checks
+→ custom trajectory comparison
 → failure analysis
 ```
 
@@ -124,6 +125,33 @@ The direct mismatches were found in:
 - `OS_AGENT_TC_009` — intent value
 
 Detailed outputs and metric reasons are available in `evaluation_output.txt`.
+
+### Custom Trajectory Evaluation
+
+The open-source agent is a LangGraph workflow, so the QA script validates
+whether each test case followed the expected workflow path.
+
+The expected trajectory is created from the existing expected CSV columns:
+category, intent, route, and escalation.
+
+The actual trajectory is recorded from the agent workflow nodes during
+execution.
+
+The comparison checks:
+
+- missing workflow steps
+- unexpected workflow steps
+- step order
+- final trajectory match
+
+Latest trajectory result:
+
+- Total test cases: `10`
+- Passed: `6`
+- Failed: `4`
+
+Trajectory recording is implemented through the agent state, workflow nodes,
+and adapter.
 
 ### Run the Open-Source Evaluation
 

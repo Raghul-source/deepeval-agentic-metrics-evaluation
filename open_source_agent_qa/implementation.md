@@ -76,11 +76,8 @@ Repository: https://github.com/niti007/langgraph-customer-support-agent
 
 ```text
 TaskCompletionMetric
-ToolCorrectnessMetric
-ArgumentCorrectnessMetric
-StepEfficiencyMetric
-PlanAdherenceMetric
-PlanQualityMetric
+Direct expected-vs-actual state checks
+Custom trajectory evaluation
 ```
 
 ### Evaluation comparison method
@@ -109,6 +106,20 @@ corresponding values returned in the agent state:
 columns are checked directly. A test case has a deterministic mismatch when
 any direct comparison fails. A test case can also fail the metric evaluation
 when the `TaskCompletionMetric` score is below its threshold of `0.60`.
+
+#### Custom trajectory comparison
+
+The evaluation script also checks whether the agent followed the expected
+LangGraph workflow path. The expected path is built from the existing CSV
+expectation columns, and the actual path is recorded from the workflow nodes
+during execution.
+
+The trajectory comparison checks:
+
+- missing workflow steps
+- unexpected workflow steps
+- step order
+- final trajectory match
 
 12. Record for every test case:
 
