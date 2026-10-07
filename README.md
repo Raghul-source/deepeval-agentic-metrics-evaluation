@@ -126,6 +126,22 @@ The direct mismatches were found in:
 
 Detailed outputs and metric reasons are available in `evaluation_output.txt`.
 
+### Evaluation Stability Note
+
+`TaskCompletionMetric` is an LLM-judge-based metric, so its score can vary
+between runs even when the same test cases are used. The evaluator may judge
+the final response more strictly or more leniently depending on the generated
+agent response and judge reasoning.
+
+For this reason, this project separates:
+
+- LLM-judge evaluation: `TaskCompletionMetric`
+- Deterministic checks: category, intent, route, escalation, and trajectory
+  matching
+
+The deterministic checks use fixed expected-vs-actual comparisons, so the same
+input and same output produce the same pass/fail result every time.
+
 ### Custom Trajectory Evaluation
 
 The open-source agent is a LangGraph workflow, so the QA script validates
@@ -147,8 +163,16 @@ The comparison checks:
 Latest trajectory result:
 
 - Total test cases: `10`
-- Passed: `6`
-- Failed: `4`
+- Passed: `8`
+- Failed: `2`
+
+### Current Trajectory Findings
+
+The custom trajectory evaluation found 2 workflow mismatches out of 10 test cases.
+
+- `OS_AGENT_TC_006` — The account-help request involved missing account details, and the source resolution prompt says missing verification or insufficient information should set `needs_escalation=true`. The agent asked for account details but returned `needs_escalation=false`, so it resolved the case instead of escalating.
+
+- `OS_AGENT_TC_007` — The user explicitly said the request was not covered by support policies. This should be classified as `other`, routed to `escalate`, and sent to human support. The agent classified it as `general_question`, routed it to retrieval, and resolved the case instead.
 
 Trajectory recording is implemented through the agent state, workflow nodes,
 and adapter.

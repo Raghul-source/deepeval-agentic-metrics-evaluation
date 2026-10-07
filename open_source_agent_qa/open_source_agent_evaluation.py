@@ -96,10 +96,7 @@ def build_expected_trajectory(row: dict) -> list[str]:
     expected_route = row["expected_route"].strip().lower()
     expected_escalation = row["expected_escalation"].strip().lower() == "true"
 
-    expected_steps = ["classify_ticket"]
-
-    if expected_category in {"billing", "account"}:
-        expected_steps.append("approval_gate")
+    expected_steps = ["classify_ticket", "approval_gate"]
 
     if expected_route == "retrieve":
         expected_steps.extend(["retrieve_knowledge", "draft_resolution"])
