@@ -3,22 +3,31 @@
 This report documents confirmed QA findings from the open-source LangGraph
 customer-support agent evaluation.
 
-## Evaluation Sources
+## Sources Used for Analysis
 
-- `TaskCompletionMetric` report
-- Direct expected-vs-actual state checks
-- Custom trajectory evaluation
-- `agent_behavior_matrix.md`
-- Source policy and workflow files under `open_source_agent_under_test/src/`
+These sources were used to confirm the QA findings.
+
+- `evaluation_output.txt` — contains the saved metric results, actual agent
+  outputs, failed checks, and trajectory comparison evidence.
+- `open_source_agent_test_cases.csv` — contains the test inputs and expected
+  values used for comparison.
+- `agent_behavior_matrix.md` — defines the expected behavior rules used to
+  review whether the CSV expectations are correct.
+- `open_source_agent_under_test/src/knowledge_base.py` — contains the support
+  policy content used by the agent.
+- `open_source_agent_under_test/src/nodes.py` — contains the workflow routing,
+  escalation, and review-gate logic.
+- `open_source_agent_under_test/src/llm_helpers.py` — contains the classifier
+  and resolver prompts used by the agent.
 
 ## Summary
 
 | Defect ID | Test Case | Finding Type | Severity | Status | Short Description |
 | --- | --- | --- | --- | --- | --- |
-| `DEF-TC-001` | `OS_AGENT_TC_003` | TaskCompletionMetric finding | Medium | Needs developer review | Document-upload crash handling was judged incomplete in the saved TaskCompletion report. |
-| `DEF-TC-002` | `OS_AGENT_TC_004` | TaskCompletionMetric finding | Medium | Needs developer review | Order-status response was judged incomplete in the saved TaskCompletion report. |
-| `DEF-TRJ-001` | `OS_AGENT_TC_006` | Deterministic trajectory/state finding | High | Confirmed | Account-help case asked for missing details but did not set escalation. |
-| `DEF-TRJ-002` | `OS_AGENT_TC_007` | Deterministic trajectory/state finding | High | Confirmed | Unsupported support-policy request was treated as a general question instead of being escalated. |
+| `DEF-TC-001` | `OS_AGENT_TC_003` | TaskCompletionMetric finding | Medium | Needs developer review | For document upload crash, the agent did not fully complete the expected bug-handling flow. |
+| `DEF-TC-002` | `OS_AGENT_TC_004` | TaskCompletionMetric finding | Medium | Needs developer review | For order status, the agent asked for missing details but did not complete the order-status resolution. |
+| `DEF-TRJ-001` | `OS_AGENT_TC_006` | Deterministic trajectory/state finding | High | Confirmed | For vague account help, the agent should escalate after asking details, but it resolved the case. |
+| `DEF-TRJ-002` | `OS_AGENT_TC_007` | Deterministic trajectory/state finding | High | Confirmed | For unsupported support request, the agent should escalate, but it handled it as a normal general question. |
 
 ## TaskCompletionMetric Findings
 
@@ -98,11 +107,3 @@ The deterministic checks and custom trajectory evaluation are rule-based for
 the same actual output and are therefore more stable for workflow defect
 tracking.
 
-## Recommended Next Steps for Developers
-
-- Review resolver escalation behavior for account requests with missing
-  verification.
-- Review classifier behavior for unsupported or out-of-policy requests.
-- Review TaskCompletion failures separately because they are judge-based
-  findings and may require product-level clarification.
-- Add regression tests for confirmed defects before changing agent behavior.
