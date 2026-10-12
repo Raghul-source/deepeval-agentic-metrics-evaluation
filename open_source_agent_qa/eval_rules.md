@@ -2,22 +2,7 @@
 
 These rules are used to build custom G-Eval criteria.
 
-Each rule must come from source policy, workflow code, or approved behavior matrix.
-
-## RULE_ID
-
-Source:
-- file path
-- exact source section or logic
-
-Condition:
-- when this rule applies
-
-Expected behavior:
-- what the agent should do
-
-G-Eval criteria sentence:
-- one clear sentence used by the evaluator
+Each rule must come from source policy or workflow code.
 
 ## RULE_ESCALATION_REQUIRED
 

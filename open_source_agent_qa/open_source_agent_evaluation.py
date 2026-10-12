@@ -9,9 +9,10 @@ import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
 from deepeval.evaluate import AsyncConfig, ErrorConfig
-from deepeval.metrics import TaskCompletionMetric
+from deepeval.metrics import GEval, TaskCompletionMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.dataset import EvaluationDataset, Golden
+from deepeval.test_case import LLMTestCase, SingleTurnParams
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 load_dotenv(PROJECT_ROOT / "open_source_agent_under_test" / ".env")
@@ -90,6 +91,142 @@ def load_dataset(path: str | None = None):
     return rows, EvaluationDataset(goldens=goldens)
 
 
+def load_eval_rules(path: str | None = None) -> dict[str, dict[str, str]]:
+    """Read eval_rules.md and return reusable rules by rule id."""
+    if path is None:
+        path = str(PROJECT_ROOT / "eval_rules.md")
+
+    content = Path(path).read_text(encoding="utf-8")
+    rules: dict[str, dict[str, str]] = {}
+
+    for block in content.split("\n## "):
+        if not block.startswith("RULE_"):
+            continue
+
+        rule_id, _, rule_body = block.partition("\n")
+        rules[rule_id.strip()] = {
+            "body": rule_body.strip(),
+            "criteria": _extract_rule_section(
+                rule_body,
+                "G-Eval criteria sentence:",
+            ),
+            "condition": _extract_rule_section(rule_body, "Condition:"),
+        }
+
+    return rules
+
+
+def _extract_rule_section(rule_body: str, section_header: str) -> str:
+    """Extract a named section from a markdown rule block."""
+    start = rule_body.find(section_header)
+    if start == -1:
+        return ""
+
+    section = rule_body[start + len(section_header):]
+    next_section_indexes = [
+        index
+        for marker in [
+            "\nSource:",
+            "\nCondition:",
+            "\nExpected behavior:",
+            "\nG-Eval criteria sentence:",
+        ]
+        if (index := section.find(marker)) != -1
+    ]
+
+    if next_section_indexes:
+        section = section[: min(next_section_indexes)]
+
+    return section.strip().replace("\n- ", " ").lstrip("- ").strip()
+
+
+def select_candidate_rules(
+    row: dict,
+    eval_rules: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    """Select a small candidate rule set from CSV expectations."""
+    selected_rule_ids: list[str] = []
+
+    def add_rule(rule_id: str):
+        if rule_id not in selected_rule_ids:
+            selected_rule_ids.append(rule_id)
+
+    customer_message = row["customer_message"].strip().lower()
+    expected_intent = row["expected_intent"].strip().lower()
+    expected_route = row["expected_route"].strip().lower()
+    expected_final_result = row["expected_final_result"].strip().lower()
+    expected_escalation = row["expected_escalation"].strip().lower() == "true"
+
+    add_rule("RULE_NO_UNSUPPORTED_POLICY_CLAIMS")
+
+    if expected_route == "retrieve":
+        add_rule("RULE_RETRIEVED_POLICY_GROUNDING")
+        add_rule("RULE_RETRIEVAL_CATEGORY_MATCHING")
+
+    if expected_escalation:
+        add_rule("RULE_ESCALATION_REQUIRED")
+
+    intent_rule_map = {
+        "refund_request": "RULE_REFUND_POLICY_VERIFICATION",
+        "payment_issue": "RULE_PAYMENT_FAILURE_ATTEMPTS",
+        "order_status": "RULE_ORDER_TRACKING_DETAILS_REQUIRED",
+        "password_reset": "RULE_PASSWORD_RESET_TROUBLESHOOTING",
+        "account_access": "RULE_ACCOUNT_VERIFICATION_REQUIRED",
+        "general_question": "RULE_GENERAL_QUESTION_RETRIEVAL",
+    }
+
+    if expected_intent in intent_rule_map:
+        add_rule(intent_rule_map[expected_intent])
+
+    if expected_intent in ["complaint", "other"]:
+        add_rule("RULE_NON_ROUTABLE_INTENT_ESCALATION")
+
+    if expected_intent == "bug_report":
+        if "login" in customer_message:
+            add_rule("RULE_LOGIN_CRASH_TROUBLESHOOTING")
+        else:
+            add_rule("RULE_MISSING_INFORMATION_HANDLING")
+
+    missing_info_keywords = [
+        "missing",
+        "details",
+        "information",
+        "info",
+        "verification",
+        "diagnostic",
+    ]
+    if any(keyword in expected_final_result for keyword in missing_info_keywords):
+        add_rule("RULE_MISSING_INFORMATION_HANDLING")
+
+    return [
+        {
+            "id": rule_id,
+            **eval_rules[rule_id],
+        }
+        for rule_id in selected_rule_ids
+        if rule_id in eval_rules
+    ]
+
+
+def build_geval_criteria(candidate_rules: list[dict[str, str]]) -> str:
+    """Build the custom G-Eval criteria from candidate rules."""
+    rule_text = "\n".join(
+        f"{index}. {rule['id']}: {rule['criteria']}"
+        for index, rule in enumerate(candidate_rules, start=1)
+    )
+
+    return f"""
+You are given source-backed candidate rules.
+
+First identify which candidate rules apply to the customer message and expected behavior.
+Then evaluate the agent response only against the applicable rules.
+Do not penalize the response for candidate rules that do not apply.
+
+Candidate rules:
+{rule_text}
+""".strip()
+
+
 def build_expected_trajectory(row: dict) -> list[str]:
     """Build the expected workflow path from existing QA expectation columns."""
     expected_category = row["expected_category"].strip().lower()
@@ -146,6 +283,7 @@ def run_evaluation():
         include_reason=True,
     )
     rows, dataset = load_dataset()
+    eval_rules = load_eval_rules()
     results = []
 
     for index, golden in enumerate(
@@ -180,6 +318,32 @@ def run_evaluation():
         actual_intent = state.get("intent", "")
         actual_route = state.get("initial_route", "")
         actual_escalation = bool(state.get("needs_escalation", False))
+        actual_output = state.get("final_response", "")
+        candidate_rules = select_candidate_rules(row, eval_rules)
+        candidate_rule_ids = [rule["id"] for rule in candidate_rules]
+        policy_geval_metric = GEval(
+            name="Policy G-Eval",
+            criteria=build_geval_criteria(candidate_rules),
+            evaluation_params=[
+                SingleTurnParams.INPUT,
+                SingleTurnParams.ACTUAL_OUTPUT,
+                SingleTurnParams.EXPECTED_OUTPUT,
+            ],
+            threshold=0.7,
+            model=groq_model,
+        )
+        policy_geval_test_case = LLMTestCase(
+            input=golden.input,
+            actual_output=actual_output,
+            expected_output=row["expected_final_result"],
+        )
+        policy_geval_metric.measure(policy_geval_test_case)
+        policy_geval_score = policy_geval_metric.score
+        policy_geval_pass = (
+            policy_geval_score is not None
+            and policy_geval_score >= 0.7
+        )
+        policy_geval_reason = policy_geval_metric.reason
         actual_trajectory = state.get("_execution_path", [])
         expected_trajectory = build_expected_trajectory(row)
         trajectory_checks = compare_trajectory(
@@ -198,7 +362,11 @@ def run_evaluation():
         results.append(
             {
                 "test_id": row["test_id"],
-                "actual_output": state.get("final_response", ""),
+                "actual_output": actual_output,
+                "candidate_rules": candidate_rule_ids,
+                "policy_geval_score": policy_geval_score,
+                "policy_geval_pass": policy_geval_pass,
+                "policy_geval_reason": policy_geval_reason,
                 "expected_trajectory": expected_trajectory,
                 "actual_trajectory": actual_trajectory,
                 **trajectory_checks,
@@ -244,9 +412,18 @@ def run_evaluation():
         "unexpected_steps",
         "order_match",
     ]
+    policy_geval_columns = [
+        "test_id",
+        "candidate_rules",
+        "policy_geval_score",
+        "policy_geval_pass",
+        "policy_geval_reason",
+    ]
 
     print("Agent execution results:")
     print(results_df[agent_result_columns].to_string(index=False))
+    print("Policy G-Eval results:")
+    print(results_df[policy_geval_columns].to_string(index=False))
     print("Trajectory evaluation results:")
     print(results_df[trajectory_columns].to_string(index=False))
     print(
