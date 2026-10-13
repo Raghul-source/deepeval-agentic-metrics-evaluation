@@ -13,10 +13,16 @@ from src.state import SupportState
 # import the SupportState typing for hints (not strictly required at runtime)
 
 # ── Structured-output wrappers ──
-classifier = llm.with_structured_output(TicketClassification)
+classifier = llm.with_structured_output(
+    TicketClassification,
+    method="json_schema",
+)
 # create a wrapper around the llm that will parse outputs into TicketClassification
 
-resolver = llm.with_structured_output(ResolutionDecision)
+resolver = llm.with_structured_output(
+    ResolutionDecision,
+    method="json_schema",
+)
 # create a wrapper that will parse outputs into ResolutionDecision
 
 def classify_with_llm(customer_message: str) -> TicketClassification:
