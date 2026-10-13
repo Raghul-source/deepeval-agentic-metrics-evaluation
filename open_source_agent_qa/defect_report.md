@@ -28,6 +28,9 @@ These sources were used to confirm the QA findings.
 | `DEF-TC-002` | `OS_AGENT_TC_004` | TaskCompletionMetric finding | Medium | Needs developer review | For order status, the agent asked for missing details but did not complete the order-status resolution. |
 | `DEF-TRJ-001` | `OS_AGENT_TC_006` | Deterministic trajectory/state finding | High | Confirmed | For vague account help, the agent should escalate after asking details, but it resolved the case. |
 | `DEF-TRJ-002` | `OS_AGENT_TC_007` | Deterministic trajectory/state finding | High | Confirmed | For unsupported support request, the agent should escalate, but it handled it as a normal general question. |
+| `DEF-GEV-001` | `OS_AGENT_TC_006` | Policy G-Eval finding | Medium | Confirmed | For vague account help, the agent escalated but did not ask the customer for missing account details. |
+| `DEF-GEV-002` | `OS_AGENT_TC_001` | Policy G-Eval finding | Medium | Confirmed | For duplicate-charge refund, the agent escalated but did not explain the documented refund policy. |
+| `DEF-GEV-003` | `OS_AGENT_TC_005` | Policy G-Eval finding | Medium | Confirmed | For password reset, the agent escalated but did not provide the documented recovery guidance. |
 
 ## TaskCompletionMetric Findings
 
@@ -99,6 +102,53 @@ state returned by the agent.
 - **Impact:** Unsupported requests may be handled as normal general questions.
 - **Area to investigate:** Classifier/routing behavior for out-of-policy
   requests.
+
+## Policy G-Eval Findings
+
+Policy G-Eval uses source-backed reusable rules to judge whether the final
+agent response follows the expected support behavior.
+
+### `DEF-GEV-001` — `OS_AGENT_TC_006`
+
+- **Input:** `Please help me with my account.`
+- **Expected:** Ask for missing account details and support escalation because
+  account verification information is missing.
+- **Actual:** Agent escalated the case and mentioned insufficient information,
+  but did not ask the customer for the missing account details.
+- **Evidence:** `Policy G-Eval` failed in `evaluation_output.txt` with score
+  `0.0`.
+- **Impact:** Human support receives the escalation, but the customer is not
+  clearly asked to provide the account details needed for verification.
+- **Area to investigate:** Account-help response content when verification
+  details are missing.
+
+### `DEF-GEV-002` — `OS_AGENT_TC_001`
+
+- **Input:** `I was charged twice for my subscription and want a refund.`
+- **Expected:** Explain that duplicate-charge refunds are available within 7
+  days and that subscription renewals require account verification.
+- **Actual:** Agent escalated the case and mentioned account verification, but
+  did not explain the duplicate-charge refund policy or the 7-day refund window.
+- **Evidence:** `Policy G-Eval` failed in `evaluation_output.txt` with score
+  `0.4`.
+- **Impact:** The customer may not receive the documented refund-policy
+  explanation before escalation.
+- **Area to investigate:** Refund response content when account verification is
+  required.
+
+### `DEF-GEV-003` — `OS_AGENT_TC_005`
+
+- **Input:** `I forgot my password and cannot log in.`
+- **Expected:** Provide safe password-recovery guidance and request required
+  verification details.
+- **Actual:** Agent escalated the case, but did not provide password-recovery
+  guidance such as checking spam, confirming email, retrying after 5 minutes, or
+  safe recovery steps.
+- **Evidence:** `Policy G-Eval` failed in `evaluation_output.txt` with score
+  `0.2`.
+- **Impact:** The customer may be escalated without receiving the documented
+  self-service password-recovery guidance.
+- **Area to investigate:** Password-reset response content before escalation.
 
 ## Evaluation Stability Note
 
