@@ -8,8 +8,9 @@ from pathlib import Path
 import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
-from deepeval.evaluate import AsyncConfig, ErrorConfig
-from deepeval.metrics import GEval, TaskCompletionMetric
+# from deepeval.evaluate import AsyncConfig, ErrorConfig
+from deepeval.metrics import FaithfulnessMetric, GEval
+# from deepeval.metrics import TaskCompletionMetric
 from deepeval.models import DeepEvalBaseLLM
 from deepeval.dataset import EvaluationDataset, Golden
 from deepeval.test_case import LLMTestCase, SingleTurnParams
@@ -42,7 +43,7 @@ class GroqDeepEvalModel(DeepEvalBaseLLM):
         requested_schema = kwargs.get("schema")
 
         print("Request model:", self.model_name)
-        print("Request max_tokens:", 1024)
+        print("Request max_tokens:", 3072)
         print("Request schema:", repr(requested_schema))
         print("Request system message:", repr(system_message))
         print("Request user prompt:", repr(prompt))
@@ -51,7 +52,7 @@ class GroqDeepEvalModel(DeepEvalBaseLLM):
             model=self.model_name,
             messages=messages,
             temperature=0,
-            max_tokens=1024,
+            max_tokens=3072,
             include_reasoning=False,
         )
 
@@ -274,26 +275,70 @@ def compare_trajectory(
     }
 
 
+def split_faithfulness_output(output: str, max_chars: int = 1200) -> list[str]:
+    """Keep every character, preferring paragraph or sentence boundaries."""
+    if max_chars < 1:
+        raise ValueError("max_chars must be positive")
+    chunks = []
+    while len(output) > max_chars:
+        window = output[:max_chars]
+        boundaries = [window.rfind("\n") + 1]
+        boundaries.extend(window.rfind(mark) + len(mark)
+                          if mark in window else 0
+                          for mark in (". ", "? ", "! "))
+        boundary = max(boundaries)
+        if boundary < max_chars // 2:
+            boundary = window.rfind(" ") + 1
+        if boundary < max_chars // 2 or boundary == 0:
+            boundary = max_chars
+        chunks.append(output[:boundary])
+        output = output[boundary:]
+    chunks.append(output)
+    return chunks
+
+
+def measure_faithfulness(input_text, actual_output, retrieval_context, model):
+    """Evaluate the entire answer in chunks and weight scores by verdict count."""
+    chunks = split_faithfulness_output(actual_output)
+    chunk_results = []
+    weighted_score = 0.0
+    verdict_count = 0
+    for index, chunk in enumerate(chunks, start=1):
+        metric = FaithfulnessMetric(
+            threshold=0.7,
+            model=model,
+            include_reason=False,
+        )
+        faithfulness_test_case = LLMTestCase(
+            input=input_text,
+            actual_output=chunk,
+            retrieval_context=retrieval_context,
+        )
+        print(f"Faithfulness chunk {index}/{len(chunks)}: {len(chunk)} characters")
+        metric.measure(faithfulness_test_case)
+        if metric.score is None:
+            raise ValueError(f"Faithfulness chunk {index} returned no score")
+        count = sum(verdict is not None for verdict in metric.verdicts)
+        weighted_score += metric.score * count
+        verdict_count += count
+        chunk_results.append({
+            "actual_output": chunk,
+            "score": metric.score,
+            "verdict_count": count,
+        })
+    # Preserve DeepEval's score of 1 when no factual claims are extracted.
+    score = weighted_score / verdict_count if verdict_count else 1.0
+    return score, chunk_results
+
+
 def run_evaluation():
     """Run every Stage 7 case once through the real traced agent."""
     groq_model = GroqDeepEvalModel()
-    task_completion_metric = TaskCompletionMetric(
-        threshold=0.5,
-        model=groq_model,
-        include_reason=True,
-    )
     rows, dataset = load_dataset()
     eval_rules = load_eval_rules()
     results = []
 
-    for index, golden in enumerate(
-        dataset.evals_iterator(
-            metrics=[task_completion_metric],
-            error_config=ErrorConfig(ignore_errors=False),
-            async_config=AsyncConfig(run_async=False),
-        ),
-        start=1,
-    ):
+    for index, golden in enumerate(dataset.goldens, start=1):
         row = rows[index - 1]
         # state = run_open_source_agent(
         #    customer_id=f"QA_{row['test_id']}",
@@ -319,6 +364,12 @@ def run_evaluation():
         actual_route = state.get("initial_route", "")
         actual_escalation = bool(state.get("needs_escalation", False))
         actual_output = state.get("final_response", "")
+        retrieved_docs = state.get("retrieved_docs", [])
+        retrieval_context = [
+            doc["content"]
+            for doc in retrieved_docs
+            if doc.get("content")
+        ]
         candidate_rules = select_candidate_rules(row, eval_rules)
         candidate_rule_ids = [rule["id"] for rule in candidate_rules]
         policy_geval_metric = GEval(
@@ -344,6 +395,14 @@ def run_evaluation():
             and policy_geval_score >= 0.7
         )
         policy_geval_reason = policy_geval_metric.reason
+        faithfulness_score, faithfulness_chunks = measure_faithfulness(
+            golden.input, actual_output, retrieval_context, groq_model,
+        )
+        faithfulness_pass = (
+            faithfulness_score is not None
+            and faithfulness_score >= 0.7
+        )
+        faithfulness_reason = None
         actual_trajectory = state.get("_execution_path", [])
         expected_trajectory = build_expected_trajectory(row)
         trajectory_checks = compare_trajectory(
@@ -367,6 +426,11 @@ def run_evaluation():
                 "policy_geval_score": policy_geval_score,
                 "policy_geval_pass": policy_geval_pass,
                 "policy_geval_reason": policy_geval_reason,
+                "retrieval_context": retrieval_context,
+                "faithfulness_score": faithfulness_score,
+                "faithfulness_pass": faithfulness_pass,
+                "faithfulness_reason": faithfulness_reason,
+                "faithfulness_chunks": faithfulness_chunks,
                 "expected_trajectory": expected_trajectory,
                 "actual_trajectory": actual_trajectory,
                 **trajectory_checks,
@@ -419,11 +483,19 @@ def run_evaluation():
         "policy_geval_pass",
         "policy_geval_reason",
     ]
+    faithfulness_columns = [
+        "test_id",
+        "faithfulness_score",
+        "faithfulness_pass",
+        "faithfulness_reason",
+    ]
 
     print("Agent execution results:")
     print(results_df[agent_result_columns].to_string(index=False))
     print("Policy G-Eval results:")
     print(results_df[policy_geval_columns].to_string(index=False))
+    print("Faithfulness results:")
+    print(results_df[faithfulness_columns].to_string(index=False))
     print("Trajectory evaluation results:")
     print(results_df[trajectory_columns].to_string(index=False))
     print(

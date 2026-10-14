@@ -87,6 +87,8 @@ This section evaluates the [LangGraph Customer Support Agent](https://github.com
 - `open_source_agent_qa/open_source_agent_evaluation.py` — runs the DeepEval evaluation.
 - `open_source_agent_qa/open_source_agent_test_cases.csv` — contains the QA test cases and expected behavior.
 - `open_source_agent_qa/agent_behavior_matrix.md` — extracts the allowed categories and intents, intent-to-route rules, knowledge-base policies, human-review conditions, escalation rules, reusable QA scenarios, and expected-value validation checklist.
+- `open_source_agent_qa/eval_rules.md` — contains source-backed reusable rules used to build custom Policy G-Eval criteria.
+- `open_source_agent_qa/defect_report.md` — contains confirmed QA findings from TaskCompletion, trajectory, and Policy G-Eval evaluation.
 - `open_source_agent_qa/evaluation_output.txt` — contains a saved evaluation run.
 - `open_source_agent_qa/smoke_test_log.txt` — records the initial smoke-test execution.
 - `open_source_agent_qa/implementation.md` — implementation plan and source-code inspection notes.
@@ -106,6 +108,7 @@ QA test case
 → DeepEval TaskCompletionMetric
 → direct category, intent, route, and escalation checks
 → custom trajectory comparison
+→ custom Policy G-Eval comparison
 → failure analysis
 ```
 
@@ -176,6 +179,45 @@ The custom trajectory evaluation found 2 workflow mismatches out of 10 test case
 
 Trajectory recording is implemented through the agent state, workflow nodes,
 and adapter.
+
+### Custom Policy G-Eval Evaluation
+
+Policy G-Eval uses source-backed reusable rules from `eval_rules.md` to judge
+whether the final agent response follows the expected support behavior.
+
+The candidate rules are selected from the test case expected values and
+customer message, then passed to G-Eval as custom judging criteria.
+
+The comparison checks:
+
+- unsupported policy claims
+- missing-information handling
+- policy-grounded response behavior
+- correct escalation behavior
+- scenario-specific support rules
+
+Latest Policy G-Eval result:
+
+- Total test cases: `10`
+- Passed: `7`
+- Failed: `3`
+
+### Current Policy G-Eval Findings
+
+The custom Policy G-Eval evaluation found 3 final-response behavior mismatches
+out of 10 test cases.
+
+- `OS_AGENT_TC_001` — The duplicate-charge refund request should explain the
+  refund policy and verification requirement, but the agent escalated without
+  giving the expected refund-policy guidance.
+
+- `OS_AGENT_TC_005` — The password-reset request should provide safe recovery
+  guidance, but the agent escalated without giving the expected
+  password-recovery steps.
+
+- `OS_AGENT_TC_006` — The vague account-help request should ask for missing
+  account details and support escalation, but the agent escalated without
+  asking for the missing account details.
 
 ### Run the Open-Source Evaluation
 
