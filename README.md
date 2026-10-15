@@ -219,6 +219,24 @@ out of 10 test cases.
   account details and support escalation, but the agent escalated without
   asking for the missing account details.
 
+### Faithfulness Evaluation
+
+`FaithfulnessMetric` checks whether claims in the agent’s final answer are supported by retrieved knowledge.
+
+It uses the full final answer as `actual_output` and retrieved document contents as `retrieval_context`.
+
+| Setting or result | Value |
+|---|---|
+| Judge model | `openai/gpt-oss-20b` through Groq |
+| Pass threshold | `0.7` |
+| Test cases | `10` |
+| Passed | `10` |
+| Failed | `0` |
+| Score for every case | `1.0` |
+| Reason generation | Disabled (`include_reason=False`) |
+
+All 10 test cases passed Faithfulness with a score of `1.0`.
+
 ### Run the Open-Source Evaluation
 
 1. Copy `open_source_agent_qa/.env.example` to `open_source_agent_qa/.env`.
