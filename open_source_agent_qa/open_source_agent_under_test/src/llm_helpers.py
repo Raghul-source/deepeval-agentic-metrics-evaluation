@@ -22,6 +22,7 @@ classifier = llm.with_structured_output(
 resolver = llm.with_structured_output(
     ResolutionDecision,
     method="json_schema",
+    strict=True,
 )
 # create a wrapper that will parse outputs into ResolutionDecision
 
