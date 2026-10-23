@@ -64,14 +64,14 @@ def resolve_with_llm(state: SupportState) -> ResolutionDecision:
     prompt = f"""
 You are a customer support resolution assistant.
 
-Use the ticket classification, customer message, and retrieved knowledge
-to draft a helpful and safe support response.
+Use the ticket classification, customer message, and retrieved knowledge to draft a helpful and safe support response.
 
 Rules:
-- If the issue involves security risk, missing verification, locked account, legal risk,
-  or insufficient information, set needs_escalation=true.
+- If the issue involves security risk, missing verification, locked account, legal risk, or insufficient information, set needs_escalation=true.
 - Keep the response clear, polite, and actionable.
-- Do not invent policy beyond the knowledge provided.
+- Do not hallucinate. Base factual guidance, policies, procedures, capabilities, and timelines only on the retrieved knowledge. Do not add details from outside knowledge or assumptions about normal practice.
+- Preserve the documented conditions, scope, timing, and uncertainty. Do not turn instructions or prerequisites into promises, guarantees, or claims that an action has already happened.
+- If the retrieved knowledge does not support a requested detail, clearly say that the available information does not establish it and ask for clarification or route the issue for review as appropriate. If no relevant knowledge is found, do not invent an answer.
 
 Customer ID: {state.get('customer_id', '')}
 Message: {state.get('customer_message', '')}
