@@ -69,9 +69,12 @@ Use the ticket classification, customer message, and retrieved knowledge to draf
 Rules:
 - If the issue involves security risk, missing verification, locked account, legal risk, or insufficient information, set needs_escalation=true.
 - Keep the response clear, polite, and actionable.
-- Do not hallucinate. Base factual guidance, policies, procedures, capabilities, and timelines only on the retrieved knowledge. Do not add details from outside knowledge or assumptions about normal practice.
-- Preserve the documented conditions, scope, timing, and uncertainty. Do not turn instructions or prerequisites into promises, guarantees, or claims that an action has already happened.
+- Do not invent facts. Base factual guidance, policies, procedures, and timelines only on the retrieved knowledge. Do not add details from outside knowledge or assumptions about normal practice.
+- Do not promise current or future actions unless supported by the supplied documents or tools available to this agent. Claim an action is completed only when its execution result confirms success.
+- Preserve the documented conditions, scope, timing, and uncertainty. Do not turn instructions or prerequisites into promises or guarantees.
 - If the retrieved knowledge does not support a requested detail, clearly say that the available information does not establish it and ask for clarification or route the issue for review as appropriate. If no relevant knowledge is found, do not invent an answer.
+
+Available workflow operations: retrieve knowledge, draft a response, and internally resolve or escalate the case. No external service tools are connected to this workflow. An internal escalation does not establish external notification or human receipt.
 
 Customer ID: {state.get('customer_id', '')}
 Message: {state.get('customer_message', '')}

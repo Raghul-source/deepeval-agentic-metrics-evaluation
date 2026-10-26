@@ -93,6 +93,7 @@ This section evaluates the [LangGraph Customer Support Agent](https://github.com
 - `open_source_agent_qa/smoke_test_log.txt` — records the initial smoke-test execution.
 - `open_source_agent_qa/implementation.md` — implementation plan and source-code inspection notes.
 - `open_source_agent_qa/learning.md` — learning notes about the professional QA process.
+- [Custom Faithfulness rules and validation](open_source_agent_qa/faithfulness_rules.md) — experimental judging rules, phrase categories, scoring conventions, known limitations and the case 010 review.
 - `open_source_agent_qa/smoke_testing_flow.md` — smoke-test steps and recorded observations.
 - `open_source_agent_qa/requirements.txt` — installs the agent and QA evaluation dependencies.
 - `open_source_agent_qa/.env.example` — shows the required environment variable using a dummy API-key value.
@@ -221,21 +222,19 @@ out of 10 test cases.
 
 ### Faithfulness Evaluation
 
-`FaithfulnessMetric` checks whether claims in the agent’s final answer are supported by retrieved knowledge.
+The main evaluator now uses the custom `WholeAnswerFaithfulnessMetric` developed in the trial. It reads the complete answer, checks individual factual points against retrieved document facts and recorded action results, and reviews unsupported points again to identify non-factual wording.
 
-It uses the full final answer as `actual_output` and retrieved document contents as `retrieval_context`.
+It uses the full final answer as `actual_output`, retrieved document contents as `retrieval_context`, and the current run's status and executed steps as `action_record`. Code calculates supported factual points divided by total factual points, excluding ignored wording. See [the rules and validation guide](open_source_agent_qa/faithfulness_rules.md), including the explicit `1.0` fallback when there are no factual points and the remaining judging limitations.
 
 | Setting or result | Value |
 |---|---|
 | Judge model | `openai/gpt-oss-20b` through Groq |
 | Pass threshold | `0.7` |
 | Test cases | `10` |
-| Passed | `10` |
-| Failed | `0` |
-| Score for every case | `1.0` |
-| Reason generation | Disabled (`include_reason=False`) |
+| Second review | Phrase-purpose classification of unsupported points |
+| Reason generation | Enabled (`include_reason=True`) |
 
-All 10 test cases passed Faithfulness with a score of `1.0`.
+Scores from earlier implementations do not describe the current evaluator. Consult the output from a new main-script run for current results. Per-point decisions, second-review labels and action records are printed in the log.
 
 ### Run the Open-Source Evaluation
 
