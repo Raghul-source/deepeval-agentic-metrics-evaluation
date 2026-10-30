@@ -307,14 +307,16 @@ def escalate_case(state: SupportState) -> SupportState:
     """Escalate the case to a human support specialist."""
     # docstring: create an escalation message for the user
 
+    escalation_reason = state.get("escalation_reason", "Needs manual review")
     escalation_msg = (
         "Your case has been escalated to a human support specialist. "
-        f"Reason: {state.get('escalation_reason', 'Needs manual review')}."
+        f"Reason: {escalation_reason}."
     )
     # build a friendly escalation message including the reason
 
     return {
         "status": "escalated",
+        "escalation_reason": escalation_reason,
         "final_response": escalation_msg,
         "execution_path": _record_step(state, "escalate_case"),
     }

@@ -36,6 +36,22 @@ CUSTOMER_CONTEXT_RULE = (
 )
 
 
+ESCALATION_ACTION_CONTEXT = (
+    "Verified workflow definition from src/nodes.py: escalate_case is the "
+    "program's internal escalation operation, documented as escalation to a human "
+    "support specialist. It sets status to escalated and records escalate_case in "
+    "execution_path. When the supplied action record contains BOTH status=escalated "
+    "and escalate_case in executed_steps, it supports the statement that the case "
+    "has been escalated to a human support specialist within this internal workflow. "
+    "Do not require separate proof of human receipt for that internal escalation "
+    "statement. This does not establish an external notification, a human reading "
+    "the case, a human response, or a completed refund. Check any such separate "
+    "claims and the stated escalation reason against their own evidence. If either "
+    "the executed step or escalated status is missing, do not infer completed "
+    "escalation merely from the answer or this operation definition."
+)
+
+
 class ContextualPoint(BaseModel):
     source_text: str = Field(min_length=1)
     verdict: Literal["supported", "unsupported", "contradicted", "ignored"]
@@ -111,6 +127,9 @@ Customer question (JSON; customer-reported details):
 
 Retrieved document facts (JSON):
 {json.dumps(retrieval_context, ensure_ascii=False)}
+
+Verified internal escalation operation:
+{ESCALATION_ACTION_CONTEXT}
 
 Recorded action results (JSON):
 {json.dumps(action_record or {}, ensure_ascii=False)}
@@ -210,6 +229,9 @@ Customer question (JSON; customer-reported details):
 Retrieved document facts (JSON):
 {json.dumps(self.truths, ensure_ascii=False)}
 
+Verified internal escalation operation:
+{ESCALATION_ACTION_CONTEXT}
+
 Recorded action results (JSON):
 {json.dumps(getattr(self, "action_record", {}), ensure_ascii=False)}
 
@@ -282,6 +304,9 @@ Customer question (JSON; customer-reported details):
 
 Retrieved document facts (JSON):
 {json.dumps(self.truths, ensure_ascii=False)}
+
+Verified internal escalation operation:
+{ESCALATION_ACTION_CONTEXT}
 
 Recorded action results (JSON):
 {json.dumps(getattr(self, "action_record", {}), ensure_ascii=False)}
@@ -357,7 +382,7 @@ def make_strict_schema(schema):
 class GroqDeepEvalModel(DeepEvalBaseLLM):
     """Use the configured Groq model as DeepEval's judge model."""
 
-    def __init__(self, model_name: str = "openai/gpt-oss-120b"):
+    def __init__(self, model_name: str = "openai/gpt-oss-20b"):
         self.model_name = model_name
         self.client = Groq(api_key=os.environ["GROQ_API_KEY"])
         self._has_made_request = False
@@ -458,17 +483,6 @@ def load_dataset(path: str | None = None):
     if path is None:
         path = str(PROJECT_ROOT / "open_source_agent_test_cases.csv")
     rows = list(csv.DictReader(open(path, encoding="utf-8-sig", newline="")))
-    # Expectation aligned with the resolver's insufficient-information rule.
-    # Apply this correction consistently to checks, Goldens and G-Eval.
-    for row in rows:
-        if row["test_id"] == "OS_AGENT_TC_010":
-            row["expected_escalation"] = "true"
-            row["expected_final_result"] = (
-                "Retrieve knowledge for the general question. Because the current "
-                "knowledge base lacks information explaining how the service works, "
-                "acknowledge insufficient information and internally escalate for "
-                "human-support review without inventing an explanation."
-            )
     goldens = [
         Golden(
             input=row["customer_message"],
@@ -501,18 +515,6 @@ def load_eval_rules(path: str | None = None) -> dict[str, dict[str, str]]:
             "condition": _extract_rule_section(rule_body, "Condition:"),
         }
 
-    # General-question retrieval does not guarantee resolution: the resolver
-    # explicitly requires escalation when retrieved information is insufficient.
-    general_rule = rules.get("RULE_GENERAL_QUESTION_RETRIEVAL")
-    if general_rule is not None:
-        general_rule["criteria"] = (
-            "For a general question, retrieve relevant knowledge first. Give a "
-            "grounded explanation when sufficient information is available. When "
-            "information is insufficient, acknowledge that limit and follow the "
-            "resolver instruction to escalate for internal human-support review; "
-            "do not require a fabricated explanation or clarification instead of "
-            "the prescribed escalation."
-        )
     return rules
 
 
@@ -733,6 +735,13 @@ def run_evaluation():
         action_record = {
             "status": state.get("status"),
             "executed_steps": state.get("_execution_path", []),
+            # Only executed escalations supply a reason as action evidence.
+            "escalation_reason": (
+                state.get("escalation_reason")
+                if state.get("status") == "escalated"
+                and "escalate_case" in state.get("_execution_path", [])
+                else None
+            ),
         }
         print("Agent answer:", repr(actual_output), flush=True)
         print("Recorded action results:", json.dumps(action_record, ensure_ascii=False), flush=True)

@@ -119,6 +119,17 @@ The full-answer context may instead make this a general offer to help after clar
 | Are scores stable and useful? | Compare point coverage and grouping across repeated runs; assess the threshold and consequences of serious unsupported statements. |
 | Do rules generalize? | Evaluate on independently established reference decisions and held-out answers that were not used to tune the prompt. Automate those regression checks once the reference decisions are settled. |
 
+## Known limitations: 30 October 2026
+
+### Case 004: tracking window mistaken for delivery time
+
+- **Observed mistake:** The checker labels “If your order has already shipped, it typically arrives within 24 hours.” as `supported`. The supplied document establishes a 24-hour tracking window, not a delivery deadline. This statement should be `unsupported` with the supplied evidence.
+- **Repeat check:** The copied script evaluated the same saved question, answer, documents and action record three times using `openai/gpt-oss-20b` through Groq. All three produced identical excerpt labels and a score of `0.6666666666666666`.
+- **Overall result:** All three correctly failed the answer against the `0.7` passing threshold, despite the incorrect individual label. This experiment found a repeated judgment mistake; it did not demonstrate label inconsistency for this input.
+- **Status:** Fix deferred by project-owner decision. Keep this as a known checker limitation, not a corrected judgment. Similar mislabelling could affect pass/fail for another answer. Three repeated trials do not establish general reliability.
+- **Scope:** No judging-rule changes were made for this experiment, and the main evaluation script was unchanged.
+- **Evidence:** The case 004 answer, cited tracking-window evidence and incorrect label are visible in [the saved evaluation log](evaluation_output.txt). The separate three-trial experiment files are retained locally and are not included in this repository update; its observed results are summarized above.
+
 ## References
 
 - [DeepEval Faithfulness documentation](https://deepeval.com/docs/metrics-faithfulness): the LLM-judge approach checks claims against retrieved facts and calculates their faithful proportion. This trial customizes the judging flow, exclusions, action evidence and score calculation.

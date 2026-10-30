@@ -43,7 +43,7 @@ G-Eval criteria sentence:
 
 Source:
 - `open_source_agent_under_test/src/llm_helpers.py`
-  - Resolver prompt says if the issue involves insufficient information, set `needs_escalation=true`.
+  - Resolver prompt allows a focused clarification with `needs_escalation=false` for vague, low-risk general questions. Other issues where missing information prevents safe handling, and security, protected-action verification, locked-account or legal risks, require escalation.
 - `open_source_agent_under_test/src/nodes.py`
   - `route_resolution_or_escalation()` routes to `escalate_case` when `needs_escalation=true`.
 
@@ -53,10 +53,11 @@ Condition:
 Expected behavior:
 - The response should ask for the missing required information.
 - The response should not claim the issue is fully resolved when required information is missing.
-- If the missing information prevents safe or complete resolution, the response should support escalation or human review.
+- For a vague, low-risk general question, missing overview information should lead to a focused clarification, not escalation; internal resolved status after clarification does not claim the requested explanation has been supplied.
+- For other issues where missing information prevents safe handling, or a security, protected-action verification, locked-account or legal risk applies, support escalation or human review.
 
 G-Eval criteria sentence:
-- If required information is missing, the response should ask for the missing details and should not present the issue as fully resolved; when missing information prevents safe or complete resolution, it should support escalation or human review.
+- If required information is missing, ask for the missing details without claiming the underlying issue is solved. For vague, low-risk general questions, accept a focused clarification and needs_escalation=false; do not penalize internal resolved status for that clarification response. For other issues where missing information prevents safe handling, or security, protected-action verification, locked-account or legal risks apply, support escalation or human review.
 
 ## RULE_RETRIEVED_POLICY_GROUNDING
 
@@ -290,11 +291,12 @@ Condition:
 
 Expected behavior:
 - The case may use knowledge retrieval instead of immediate escalation.
-- The response should stay grounded in retrieved knowledge or ask a focused clarification if knowledge is not enough.
+- The response should stay grounded in retrieved knowledge. For a vague, low-risk general question with insufficient knowledge, acknowledge the limit, ask a focused clarification and set needs_escalation=false; internal resolution of this clarification turn is acceptable.
+- Security, verification needed for a protected action, locked-account and legal risks still require escalation.
 - The response should not invent unsupported policy.
 
 G-Eval criteria sentence:
-- When the classified intent is `general_question`, the response may use knowledge retrieval, but it should stay grounded in retrieved knowledge or ask a focused clarification if knowledge is not enough, and it should not invent unsupported policy.
+- When the classified intent is `general_question`, retrieve relevant knowledge and stay grounded in it. For a vague, low-risk general question with insufficient information, accept acknowledgment of the limitation and a focused clarification without escalation; internal resolved status for that turn is acceptable and does not claim the explanation was provided. Do not require escalation solely for missing overview information or invent unsupported policy. Security, verification needed for a protected action, locked-account and legal risks still require escalation.
 
 ## RULE_RETRIEVAL_CATEGORY_MATCHING
 
